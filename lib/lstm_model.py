@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import tensorflow as tf
 import numpy as np
 from lib.loss import sequence_loss
@@ -6,10 +7,10 @@ import datetime as dt
 #*****************************************************************
 def batch_producer(raw_data, batch_size, num_steps):
 	raw_data = tf.convert_to_tensor(raw_data, dtype=tf.int32, name='raw_data')
-	data_len = len(raw_data)
+	data_len = raw_data.get_shape().as_list()[0]
 	batches = data_len // batch_size
 
-	data = tf.reshape(raw_data[0:batch_size*batches], [batche_size, batches, 100, 57])
+	data = tf.reshape(raw_data[0:batch_size*batches], [batch_size, batches, 100, 57])
 	epoch_pieces = (batches - 1) // num_steps
 
 	i = tf.train.range_input_producer(epoch_pieces, num_epochs=1, shuffle=False, seed=0).dequeue()
@@ -119,3 +120,8 @@ def train(train_data, num_layers, num_epochs, batch_size, model_save_name):
 		coord.request_stop()
 		coord.join(threads)
 #*****************************************************************
+if __name__ == '__main__':
+	from lib.preprocessing import load_piece
+	piece = load_piece('./data/Mozart/', 2)
+	print(piece.shape)
+	train(piece, 1, 1, batch_size=20, model_save_name='./checkpoints/0/model')

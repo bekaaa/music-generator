@@ -82,7 +82,7 @@ def sequence_loss(logits,
 	ValueError: logits does not have 3 dimensions or targets does not have 2
 				dimensions or weights does not have 2 dimensions.
 	"""
-	if len(logits.get_shape()) != 3:
+	if len(logits.get_shape()) != 2:
 		raise ValueError("Logits must be a "
 			"[batch_size x sequence_length x logits] tensor")
 	if len(targets.get_shape()) != 3:
@@ -93,7 +93,7 @@ def sequence_loss(logits,
 			"tensor")
 
 	with tf.name_scope(name, "sequence_loss", [logits, targets, weights]):
-		note_elements = tf.shape(logits)[2]
+		note_elements = tf.shape(logits)[-1]
 		logits_flat = tf.reshape(logits, [-1, note_elements])
 		targets = tf.reshape(targets, [-1, note_elements])
 		#---------------------------
@@ -130,6 +130,5 @@ def sequence_loss(logits,
 			crossent /= total_size
 		return crossent
 
-if __name__ == '__main__':
-	print('this script should be imported Not run. ')
-	return
+#if __name__ == '__main__':
+#	print('this script should be imported Not run. ')
