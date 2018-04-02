@@ -100,7 +100,6 @@ def sequence_loss(logits,
 		# computing cross entropy
 		crossent = 0
 		for i in [0, 19, 38] :
-			sublabels = targets[:, i:i+19]
 			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19],
 				logits=logits_flat[:, i:i+19])
 			crossent += tf.reduce_mean(loss, axis=1)
