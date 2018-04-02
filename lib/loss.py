@@ -129,3 +129,7 @@ def sequence_loss(logits,
 			total_size += 1e-12  # to avoid division by 0 for all-0 weights
 			crossent /= total_size
 		return crossent
+
+if __name__ == '__main__':
+	print('this script should be imported Not run. ')
+	return
