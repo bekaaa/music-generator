@@ -6,7 +6,7 @@ import datetime as dt
 
 #*****************************************************************
 def batch_producer(raw_data, batch_size, num_steps):
-	raw_data = tf.convert_to_tensor(raw_data, dtype=tf.int32, name='raw_data')
+	raw_data = tf.convert_to_tensor(raw_data, dtype=tf.float32, name='raw_data')
 	data_len = raw_data.get_shape().as_list()[0]
 	batches = data_len // batch_size
 
@@ -15,8 +15,10 @@ def batch_producer(raw_data, batch_size, num_steps):
 
 	i = tf.train.range_input_producer(epoch_pieces, num_epochs=1, shuffle=False, seed=0).dequeue()
 	x = data[ :, i * num_steps : (i+1) * num_steps, :, : ]
+	x = tf.reshape(x, (batch_size, num_steps, 5700))
 	x.set_shape((batch_size, num_steps, 5700))
 	y = data[ :, i * num_steps + 1 : (i+1) * num_steps + 1, 0, : ]
+	y = tf.reshape(y,(batch_size, num_steps, 57))
 	y.set_shape((batch_size, num_steps, 57))
 
 	return x,y
@@ -29,7 +31,7 @@ class Input(object):
 		self.input_data, self.targets = batch_producer(data, batch_size, num_steps)
 #*******************************************************************************
 class Model(object):
-	def __init__(self, input_obj, is_training, hidden_size, num_layers, droprate=.3, init_scale=0.05):
+	def __init__(self, input_obj, is_training, hidden_size, num_layers, element_size, droprate=.3, init_scale=0.05):
 		self.input_obj = input_obj
 		self.hidden_size = hidden_size
 		self.init_scale = init_scale
@@ -56,14 +58,14 @@ class Model(object):
 		if num_layers > 1 :
 			cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(num_layers)])
 
-		output, self.state = tf.nn.dynamic_rnn(cell, inputs, initial_state=rnn_tuple_state)
+		output, self.state = tf.nn.dynamic_rnn(cell, inputs,dtype=tf.float32)#, initial_state=rnn_tuple_state)
 		# output is in shape [ batch_size, num_steps, hidden_size ]
 		#----------------------------------------------------------------------------------
 		# Now define the softmax, loss and optimizer.
 		output = tf.reshape(output, (-1, hidden_size))
-		softmax_weights = tf.Variable(tf.random_uniform([hidden_size, note_elements],
+		softmax_weights = tf.Variable(tf.random_uniform([hidden_size, element_size],
 														-init_scale,init_scale))
-		softmax_biases = tf.Variable(tf.random_uniform([note_elements], -init_scale, init_scale))
+		softmax_biases = tf.Variable(tf.random_uniform([element_size], -init_scale, init_scale))
 		logits = tf.nn.xw_plus_b(output, softmax_weights, softmax_biases)
 
 		# update cost
@@ -89,8 +91,10 @@ def train(train_data, num_layers, num_epochs, batch_size, model_save_name):
 	print_step = 50
 	global_step = 0
 	hidden_size = 5700
+	element_size = 57
 	training_input = Input(batch_size, 30, train_data)
-	model = Model(training_input, is_training=True, hidden_size=hidden_size, num_layers=num_layers)
+	model = Model(training_input, is_training=True, hidden_size=hidden_size, num_layers=num_layers
+		, element_size=element_size)
 	init_op = tf.global_variable_initializer()
 	with tf.Session() as sess :
 		sess.run([init_op])

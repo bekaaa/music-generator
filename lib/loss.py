@@ -104,6 +104,7 @@ def sequence_loss(logits,
 				logits=logits_flat[:, i:i+19])
 			crossent += tf.reduce_mean(loss, axis=1)
 		crossent /= 3.
+		print(tf.shape(crossent), tf.shape(targets))
 		assert tf.shape(crossent) == tf.shape(targets)[0]
 		# add weights
 		crossent *= tf.reshape(weights, [-1])
