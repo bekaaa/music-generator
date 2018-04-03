@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 from lib.loss import sequence_loss
 import datetime as dt
-import pickle
+
 #*****************************************************************
 def batch_producer(raw_data, batch_size, num_steps):
 	#print('batch_producer**')
@@ -75,14 +75,8 @@ class Model(object):
 														-init_scale,init_scale))
 		softmax_biases = tf.Variable(tf.random_uniform([element_size], -init_scale, init_scale))
 		logits = tf.nn.xw_plus_b(output, softmax_weights, softmax_biases)
-		self.logits = logits
-		self.targets = self.input_obj.targets
 		print('logits',logits.get_shape())
 		# update cost
-		#with open('./logits.pkl', 'wb') as f:
-		#	pickle.dump(logits, f)
-		#with open('./targets.pkl', 'wb') as f:
-		#	pickle.dump(targ, f)
 		self.cost = sequence_loss(logits, self.input_obj.targets, tf.ones([self.batch_size, self.num_steps]),
 					average_across_batch=True, average_across_timesteps=True, name='Loss')
 		print('cost', self.cost)
@@ -121,12 +115,6 @@ def train(train_data, num_layers, num_epochs, batch_size, model_save_name):
 			curr_time = dt.datetime.now()
 			for step in range(training_input.epoch_pieces):
 				# run a training step.
-				logits, targets = sess.run([model.logits, model.targets],
-					feed_dict={model.init_state : current_state})
-				with open('./logits.pkl', 'wb') as f:
-					pickle.dump(logits, f)
-				with open('./targets.pkl', 'wb') as f:
-					pickle.dump(targets, f)
 				cost, _, current_state = sess.run([model.cost, model.optimizer, model.state],
 					feed_dict={model.init_state : current_state})
 				# print cost, sconds per step every print_step

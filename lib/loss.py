@@ -91,20 +91,30 @@ def sequence_loss(logits,
 	if len(weights.get_shape()) != 2:
 		raise ValueError("Weights must be a [batch_size x sequence_length] "
 			"tensor")
-
+	print('loss.py',logits.get_shape(), targets.get_shape(), weights.get_shape())
 	with tf.name_scope(name, "sequence_loss", [logits, targets, weights]):
 		note_elements = tf.shape(logits)[-1]
 		logits_flat = tf.reshape(logits, [-1, note_elements])
 		targets = tf.reshape(targets, [-1, note_elements])
 		#---------------------------
 		# computing cross entropy
-		crossent = 0
-		for i in [0, 19, 38] :
-			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19],
-				logits=logits_flat[:, i:i+19])
+		import pickle
+		logi = tf.identity(logits_flat)
+		targ = tf.reshape(targets, [-1, note_elements])
+		#with open('./logits.pkl', 'wb') as f:
+		#	pickle.dump(logi, f)
+		with open('./targets.pkl', 'wb') as f:
+			pickle.dump(targ, f)
+		loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,:19], logits=logits_flat[:,:19])
+		crossent = tf.reduce_mean(loss, axis=1)
+		print('cross',targets[0,])
+		for i in [19, 38] :
+			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19], logits=logits_flat[:, i:i+19])
+			print(loss.get_shape())
 			crossent += tf.reduce_mean(loss, axis=1)
+			print(loss)
 		crossent /= 3.
-		print(tf.shape(crossent), tf.shape(targets))
+		print(crossent.get_shape().as_list(), targets.get_shape().as_list())
 		assert tf.shape(crossent) == tf.shape(targets)[0]
 		# add weights
 		crossent *= tf.reshape(weights, [-1])
