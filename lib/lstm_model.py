@@ -87,9 +87,9 @@ class Model(object):
 					average_across_batch=True, average_across_timesteps=True, name='Loss')
 		print('cost', self.cost)
 		# get predictions
-		self.predictions = np.zeros(tf.shape(logits))
-		for i in [0, 19, 38] :
-			self.predictions[:,:,i:i+19] = tf.nn.sigmoid(logits[:,:,i:i+19])
+		#self.predictions = np.zeros(tf.shape(logits))
+		#for i in [0, 19, 38] :
+		#	self.predictions[:,:,i:i+19] = tf.nn.sigmoid(logits[:,:,i:i+19])
 
 		# return in case of validating or testing
 		if not is_training :
@@ -109,15 +109,15 @@ def train(train_data, num_layers, num_epochs, batch_size, model_save_name):
 	training_input = Input(batch_size, 30, train_data)
 	model = Model(training_input, is_training=True, hidden_size=hidden_size, num_layers=num_layers
 		, element_size=element_size)
-	init_op = tf.global_variable_initializer()
+	init_op = tf.global_variables_initializer()
 	with tf.Session() as sess :
 		sess.run([init_op])
-		coord = tf.train.Coordiantor()
+		coord = tf.train.Coordinator()
 		threads = tf.train.start_queue_runners(coord=coord)
 		saver = tf.train.Saver()
 		# start training.
 		for epoch in range(num_epochs):
-			curent_state = np.zeros([num_layers, 2, batch_size, hidden_size])
+			current_state = np.zeros([num_layers, 2, batch_size, hidden_size])
 			curr_time = dt.datetime.now()
 			for step in range(training_input.epoch_pieces):
 				# run a training step.

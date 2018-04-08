@@ -1,36 +1,12 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #-----------------------------------------------------
 # this file is taken from the main library,
 # refrence : https://github.com/tensorflow/tensorflow/blob/master/tensorflow/contrib/seq2seq/python/ops/loss.py
 # I changed some lines to make it work with the project.
 # Loss and cost are computed inside this file
-# below is the author's Copyright.
-#--------------------------------------------------------
-# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 # ==============================================================================
 """Seq2seq loss operations for use in sequence models.
 """
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
-#from tensorflow.python.framework import ops
-#from tensorflow.python.ops import tf
-#from tensorflow.python.ops import tf
-#from tensorflow.python.ops import nn_ops
 import tensorflow as tf
 
 __all__ = ["sequence_loss"]
@@ -38,7 +14,7 @@ __all__ = ["sequence_loss"]
 
 def sequence_loss(logits,
 				targets,
-				weights,
+				weights = None,
 				average_across_timesteps=True,
 				average_across_batch=True,
 				name=None):
@@ -84,62 +60,54 @@ def sequence_loss(logits,
 	"""
 	if len(logits.get_shape()) != 2:
 		raise ValueError("Logits must be a "
-			"[batch_size x sequence_length x logits] tensor")
-	if len(targets.get_shape()) != 3:
+			"[num_of_elements_in_batch x element_size] tensor")
+	if len(targets.get_shape()) != 2:
 		raise ValueError("Targets must be a "
-			"[batch_size x sequence_length x targits] tensor")
-	if len(weights.get_shape()) != 2:
-		raise ValueError("Weights must be a [batch_size x sequence_length] "
-			"tensor")
-	print('loss.py',logits.get_shape(), targets.get_shape(), weights.get_shape())
+			"[num_of_elements_in_batch x element_size] tensor")
+	#if len(weights.get_shape()) != 2:
+	#	raise ValueError("Weights must be a [batch_size x sequence_length] "
+	#		"tensor")
+
 	with tf.name_scope(name, "sequence_loss", [logits, targets, weights]):
-		note_elements = tf.shape(logits)[-1]
-		logits_flat = tf.reshape(logits, [-1, note_elements])
-		targets = tf.reshape(targets, [-1, note_elements])
 		#---------------------------
 		# computing cross entropy
-		import pickle
-		logi = tf.identity(logits_flat)
-		targ = tf.reshape(targets, [-1, note_elements])
-		#with open('./logits.pkl', 'wb') as f:
-		#	pickle.dump(logi, f)
-		with open('./targets.pkl', 'wb') as f:
-			pickle.dump(targ, f)
-		loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,:19], logits=logits_flat[:,:19])
-		crossent = tf.reduce_mean(loss, axis=1)
-		print('cross',targets[0,])
-		for i in [19, 38] :
-			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19], logits=logits_flat[:, i:i+19])
-			print(loss.get_shape())
+		crossent = tf.zeros(logits.get_shape().as_list()[0])
+		for i in [0, 19, 38] :
+			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19], logits=logits[:, i:i+19])
+			# loss is in the same shape of labels and logits
 			crossent += tf.reduce_mean(loss, axis=1)
-			print(loss)
+			# axis 1 will remove second axis.
 		crossent /= 3.
-		print(crossent.get_shape().as_list(), targets.get_shape().as_list())
-		assert tf.shape(crossent) == tf.shape(targets)[0]
-		# add weights
-		crossent *= tf.reshape(weights, [-1])
-		#----------------------------------
-
-		if average_across_timesteps and average_across_batch:
-			crossent = tf.reduce_sum(crossent)
-			total_size = tf.reduce_sum(weights)
-			total_size += 1e-12  # to avoid division by 0 for all-0 weights
-			crossent /= total_size
-		else:
-			batch_size = tf.shape(logits)[0]
-			sequence_length = tf.shape(logits)[1]
-			crossent = tf.reshape(crossent, [batch_size, sequence_length])
-		if average_across_timesteps and not average_across_batch:
-			crossent = tf.reduce_sum(crossent, axis=[1])
-			total_size = tf.reduce_sum(weights, axis=[1])
-			total_size += 1e-12  # to avoid division by 0 for all-0 weights
-			crossent /= total_size
-		if not average_across_timesteps and average_across_batch:
-			crossent = tf.reduce_sum(crossent, axis=[0])
-			total_size = tf.reduce_sum(weights, axis=[0])
-			total_size += 1e-12  # to avoid division by 0 for all-0 weights
-			crossent /= total_size
+		assert crossent.get_shape().as_list()[0] == targets.get_shape().as_list()[0]
+		# early exit for now
+		# reduce crossent to a single number
+		crossent = tf.reduce_mean(crossent)
 		return crossent
+
+		# add weights
+		# crossent *= weights
+		# #----------------------------------
+		#
+		# if average_across_timesteps and average_across_batch:
+		# 	crossent = tf.reduce_sum(crossent)
+		# 	total_size = tf.reduce_sum(weights)
+		# 	total_size += 1e-12  # to avoid division by 0 for all-0 weights
+		# 	crossent /= total_size
+		# else:
+		# 	batch_size = tf.shape(logits)[0]
+		# 	sequence_length = tf.shape(logits)[1]
+		# 	crossent = tf.reshape(crossent, [batch_size, sequence_length])
+		# if average_across_timesteps and not average_across_batch:
+		# 	crossent = tf.reduce_sum(crossent, axis=[1])
+		# 	total_size = tf.reduce_sum(weights, axis=[1])
+		# 	total_size += 1e-12  # to avoid division by 0 for all-0 weights
+		# 	crossent /= total_size
+		# if not average_across_timesteps and average_across_batch:
+		# 	crossent = tf.reduce_sum(crossent, axis=[0])
+		# 	total_size = tf.reduce_sum(weights, axis=[0])
+		# 	total_size += 1e-12  # to avoid division by 0 for all-0 weights
+		# 	crossent /= total_size
+		# return crossent
 
 #if __name__ == '__main__':
 #	print('this script should be imported Not run. ')

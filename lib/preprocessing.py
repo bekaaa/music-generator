@@ -79,14 +79,14 @@ def load_piece(music_folder, pieceId):
 		data = pickle.load(f)
 	return data
 #-------------------------------------------------------------------------
-def rearrange_data(data, num_comb=100):
+def rearrange_data(data, num_prev=100):
 	'''
 	input is in shape  [notes_chords, 3, 19]
-	output is in shape [new_len, num_comb, 57]
+	output is in shape [new_len, num_prev, 57]
 	'''
-	new_len = data.shape[0] - num_comb
-	new_data = np.zeros([ new_len, 100, 3, 19])
+	new_len = data.shape[0] - num_prev
+	new_data = np.zeros([ new_len, num_prev, 3, 19])
 	for i in range(new_len):
-		new_data[i] = data[i:i+num_comb]
-	new_data = new_data.reshape(-1, 100, 3*19)
+		new_data[i] = data[i:i+num_prev]
+	new_data = new_data.reshape(-1, num_prev, 3*19)
 	return new_data
