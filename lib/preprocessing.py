@@ -90,3 +90,4 @@ def rearrange_data(data, num_prev=100):
 		new_data[i] = data[i:i+num_prev]
 	new_data = new_data.reshape(-1, num_prev, 3*19)
 	return new_data
+#----------------------------------------------------------------------
