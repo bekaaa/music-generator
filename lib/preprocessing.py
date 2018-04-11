@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-import numpy as np
 from collections import OrderedDict
-from music21 import instrument, note, chord, converter
-import _pickle as pickle
-import glob
+from __init__ import np, pickle, glob, instrument, note, chord, converter
+#from __init__ import *
 #---------------------------------------
 def preprocess_raw_data(input_folder, output_folder):
 

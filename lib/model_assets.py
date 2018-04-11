@@ -1,7 +1,5 @@
 #!/use/bin/env python3
-import numpy as np
-import tensorflow as tf
-from music21 import instrument, note, stream, chord
+from __init__ import tf, np, instrument, note, stream, chord
 
 class Input(object):
 	def __init__(self, raw_data, c): # c is a Config object
@@ -20,7 +18,7 @@ class Input(object):
 		self.num_loops_in_epoch = self.num_batches // self.num_steps
 		self.hidden_size = self.element_size * self.num_prev
 		self.num_all_elem = self.batch_size * self.num_steps
-		self.tensor_input_shape = [self.batch_size, self.num_steps, self.hidden_size]
+		self.tensor_input_shape = [None, self.num_steps, self.hidden_size]
 		self.tensor_output_shape = [self.num_all_elem, self.element_size]
 		#------------------------------------
 	def next_batch(self):
@@ -46,7 +44,7 @@ class Input(object):
 		try :
 			return(self.x, self.y)
 		except :
-			raise ValueError('You need to run new_batch() for the first time.')
+			raise ValueError('You need to run next_batch() for the first time.')
 		#----------------------------------
 #***********************************************************************
 class Config(object):
@@ -75,20 +73,20 @@ def sequence_loss(logits, targets):
 		raise ValueError("Targets must be a "
 			"[num_of_elements_in_batch x element_size] tensor")
 
-	with tf.name_scope("sequence_loss", [logits, targets]):
+	with tf.variable_scope("sequence_loss", reuse=tf.AUTO_REUSE):
 		#---------------------------
 		# computing cross entropy
-		crossent = tf.zeros(logits.get_shape().as_list()[0])
+		cost = tf.zeros(logits.get_shape().as_list()[0], name='cost')
 		for i in [0, 19, 38] :
 			loss = tf.nn.sigmoid_cross_entropy_with_logits(labels=targets[:,i:i+19], logits=logits[:, i:i+19])
 			# loss is in the same shape of labels and logits
-			crossent += tf.reduce_mean(loss, axis=1)
+			cost += tf.reduce_mean(loss, axis=1)
 			# axis 1 will remove second axis.
-		crossent /= 3.
-		assert crossent.get_shape().as_list()[0] == targets.get_shape().as_list()[0]
+		cost /= 3.
+		assert cost.get_shape().as_list()[0] == targets.get_shape().as_list()[0]
 		# reduce crossent to a single number
-		crossent = tf.reduce_mean(crossent)
-		return crossent
+		cost = tf.reduce_mean(cost, name='cost')
+	return cost
 #******************************************************************
 def predictions_to_notes(preds):
 	# preds are in shape [ n_notes x element_size]

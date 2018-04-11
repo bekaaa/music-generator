@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
-import sys
-sys.path.append('..')
-from lib.preprocessing import load_piece, rearrange_data
-from lib.model_assets import Input, Config
-from lib.lstm_model import MusicLSTM
+#from __init__ import *
+from __init__ import load_piece, rearrange_data, Input, Config, MusicLSTM
 
 def main():
 	config = Config()
@@ -18,7 +15,7 @@ def main():
 	config.save_after_epoch = 1
 	config.model_save_path = '../checkpoints/2/model-test'
 
-	print('loading data')
+	print('loading data ...', end='  ')
 	raw_data = load_piece('../data/Mozart_pickles/', 1)
 	raw_data = rearrange_data(raw_data, config.num_prev)
 	print('data loaded in shape',raw_data.shape)

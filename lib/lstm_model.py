@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
-import tensorflow as tf
-import numpy as np
-from lib.model_assets import sequence_loss
 import datetime as dt
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
+from __init__ import tf, np, sequence_loss
+#from __init__ import *
 
 class MusicLSTM(object):
 	def __init__(self, input_, config):
@@ -30,58 +27,63 @@ class MusicLSTM(object):
 		self.graph = tf.Graph()
 		with self.graph.as_default():
 			# input placeholders
-			self.tf_x = tf.placeholder(tf.float32, shape=self.i.tensor_input_shape, name='data_input')
-			self.tf_y = tf.placeholder(tf.float32, shape=self.i.tensor_output_shape, name='data_output')
-			#tf_test = tf.placeholder(tf.float32, shape=self.i.tensor_input_shape, name='test_input')
+			with tf.variable_scope('data_tensors', reuse=tf.AUTO_REUSE):
+				self.tf_x = tf.placeholder(tf.float32, shape=self.i.tensor_input_shape, name='data_input')
+				self.tf_y = tf.placeholder(tf.float32, shape=self.i.tensor_output_shape, name='data_output')
 
 			# softmax layer variables
 			# define weights and biases
-			W = tf.Variable(tf.random_uniform([self.i.hidden_size, self.i.element_size],\
-				-self.c.init_scale, self.c.init_scale))
-			b = tf.Variable(tf.zeros(self.i.element_size))
+			with tf.variable_scope('softmax_Wb', reuse=tf.AUTO_REUSE):
+				W = tf.Variable(tf.random_uniform([self.i.hidden_size, self.i.element_size],\
+					-self.c.init_scale, self.c.init_scale), name='W')
+				b = tf.Variable(tf.zeros(self.i.element_size), name='b')
 
 			# set True for training
-			self.is_training = tf.Variable(True, dtype=tf.bool)
+			self.is_training = tf.Variable(True, dtype=tf.bool, name='training_flag', trainable=False)
 
 			# define LSTM layer[s]
 			# LSTM cell
-			cell = tf.contrib.rnn.LSTMCell(self.i.hidden_size, state_is_tuple=True)
-			if self.is_training and self.c.droprate > 0 :
-				cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1-self.c.droprate)
-			if self.c.num_layers > 1:
-				cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.c.num_layers)])
+			with tf.variable_scope('lstm_cell', reuse=tf.AUTO_REUSE):
+				cell = tf.contrib.rnn.LSTMCell(self.i.hidden_size, state_is_tuple=True, name='cell')
+				if self.is_training and self.c.droprate > 0 :
+					cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1-self.c.droprate)
+				if self.c.num_layers > 1:
+					cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.c.num_layers)])
 			#-----------------------------------------------------------------------
 			# initial state for C and H
-			if self.c.num_layers > 1 :
-				self.init_state = tf.placeholder(tf.float32,[self.c.num_layers, 2,\
-					self.i.batch_size, self.i.hidden_size], 'init_state')
-				state_per_layer_list = tf.unstack(self.init_state, axis=0)
-				rnn_state_tuple = tuple(
-					tf.contrib.rnn.LSTMStateTuple(state_per_layer_list[idx][0],state_per_layer_list[idx][1])
-					for idx in range(self.c.num_layers))
-			else :
-				self.init_state = tf.placeholder(tf.float32, [2, self.i.batch_size, self.i.hidden_size], 'init_state')
-				rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(self.init_state[0], self.init_state[1])
+			with tf.variable_scope('initial_state', reuse=tf.AUTO_REUSE):
+				if self.c.num_layers > 1 :
+					self.init_state = tf.placeholder(tf.float32,[self.c.num_layers, 2,\
+						self.i.batch_size, self.i.hidden_size], 'init_state')
+					state_per_layer_list = tf.unstack(self.init_state, axis=0)
+					rnn_state_tuple = tuple(
+						tf.contrib.rnn.LSTMStateTuple(state_per_layer_list[idx][0],state_per_layer_list[idx][1])
+						for idx in range(self.c.num_layers))
+				else :
+					self.init_state = tf.placeholder(tf.float32, [2, self.i.batch_size, self.i.hidden_size], 'init_state')
+					rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(self.init_state[0], self.init_state[1])
 			#--------------------------------------------------------------------------
 			# -*-* Forward Propagation -*-*-*
-			# add dropout to input_
-			if self.is_training and self.c.droprate > 0 :
-				self.tf_x = tf.nn.dropout(self.tf_x, keep_prob=1-self.c.droprate, name='input_dropout')
-			# run LSTM
-			output, self.state = tf.nn.dynamic_rnn(cell, self.tf_x, dtype=tf.float32, initial_state=rnn_state_tuple)
-			# output is in shape [batch_size, num_steps, hidden_size]
-			# state is in shape [batch_size, cell_state_size]
+			with tf.variable_scope('Forward_propagation', reuse=tf.AUTO_REUSE):
+				# add dropout to input_
+				if self.is_training and self.c.droprate > 0 :
+					self.tf_x = tf.nn.dropout(self.tf_x, keep_prob=1-self.c.droprate, name='input_dropout')
+				# run LSTM
+				output, self.state = tf.nn.dynamic_rnn(cell, self.tf_x, dtype=tf.float32, initial_state=rnn_state_tuple)
+				# output is in shape [batch_size, num_steps, hidden_size]
+				# state is in shape [batch_size, cell_state_size]
 
-			# reshape output to 2 dimesions
-			output = tf.reshape(output, [self.i.num_all_elem, self.i.hidden_size])
+				# reshape output to 2 dimesions
+				output = tf.reshape(output, [self.i.num_all_elem, self.i.hidden_size], name='output')
 
-			# run softmax
-			self.logits = tf.nn.xw_plus_b(output, W, b)
-			# logits are in shape [num_all_elem, element_size] ie.(in the same shape as tf_y)
+				# run softmax
+				self.logits = tf.nn.xw_plus_b(output, W, b, name='logits')
+				# logits are in shape [num_all_elem, element_size] ie.(in the same shape as tf_y)
 			#---------------------------------------------------------------------------------------
 			# -*-* training cost and optimizer -*-*
-			self.cost = sequence_loss(self.logits, self.tf_y)
-			self.optimizer = tf.train.AdamOptimizer().minimize(self.cost)
+			with tf.variable_scope('cost_and_optimizer', reuse=tf.AUTO_REUSE):
+				self.cost = sequence_loss(self.logits, self.tf_y)
+				self.optimizer = tf.train.AdamOptimizer(name='Adam').minimize(self.cost)
 			#-----------------------------------------------------
 		return
 	#------------------------------------
@@ -104,7 +106,7 @@ class MusicLSTM(object):
 		sess.run(tf.global_variables_initializer())
 		print('Done')
 		# define model saver for checkpoints
-		saver = tf.train.Saver()
+		saver = tf.train.Saver(name='saver')
 		# save graph one time only.
 		if self.c.save_model and self.c.model_save_path :
 			print('Saving graph to disk ...', end='  ')
