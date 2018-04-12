@@ -45,23 +45,25 @@ class MusicLSTM(object):
 			# LSTM cell
 			with tf.variable_scope('lstm_cell', reuse=tf.AUTO_REUSE):
 				cell = tf.contrib.rnn.LSTMCell(self.i.hidden_size, state_is_tuple=True, name='cell')
+				# Add dropout.
 				if self.is_training and self.c.droprate > 0 :
 					cell = tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=1-self.c.droprate)
+				# cells
 				if self.c.num_layers > 1:
 					cell = tf.contrib.rnn.MultiRNNCell([cell for _ in range(self.c.num_layers)])
 			#-----------------------------------------------------------------------
 			# initial state for C and H
 			with tf.variable_scope('initial_state', reuse=tf.AUTO_REUSE):
-				if self.c.num_layers > 1 :
-					self.init_state = tf.placeholder(tf.float32,[self.c.num_layers, 2,\
-						self.i.batch_size, self.i.hidden_size], 'init_state')
+				if self.c.num_layers == 1 :
+					self.init_state = tf.placeholder(tf.float32,[2, self.i.batch_size, self.i.hidden_size],'init_state')
+					rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(self.init_state[0], self.init_state[1])
+				else :
+					self.init_state = tf.placeholder(tf.float32,[self.c.num_layers, 2, self.i.batch_size,self.i.hidden_size],\
+						'init_state')
 					state_per_layer_list = tf.unstack(self.init_state, axis=0)
 					rnn_state_tuple = tuple(
 						tf.contrib.rnn.LSTMStateTuple(state_per_layer_list[idx][0],state_per_layer_list[idx][1])
 						for idx in range(self.c.num_layers))
-				else :
-					self.init_state = tf.placeholder(tf.float32, [2, self.i.batch_size, self.i.hidden_size], 'init_state')
-					rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(self.init_state[0], self.init_state[1])
 			#--------------------------------------------------------------------------
 			# -*-* Forward Propagation -*-*-*
 			with tf.variable_scope('Forward_propagation', reuse=tf.AUTO_REUSE):
@@ -71,7 +73,7 @@ class MusicLSTM(object):
 				# run LSTM
 				output, self.state = tf.nn.dynamic_rnn(cell, self.tf_x, dtype=tf.float32, initial_state=rnn_state_tuple)
 				# output is in shape [batch_size, num_steps, hidden_size]
-				# state is in shape [batch_size, cell_state_size]
+				# state is in shape [num_layers, batch_size, cell_state_size]
 
 				# reshape output to 2 dimesions
 				output = tf.reshape(output, [self.i.num_all_elem, self.i.hidden_size], name='output')
@@ -86,12 +88,6 @@ class MusicLSTM(object):
 				self.optimizer = tf.train.AdamOptimizer(name='Adam').minimize(self.cost)
 			#-----------------------------------------------------
 		return
-	#------------------------------------
-	def initial_state(self):
-		if self.c.num_layers == 1 :
-			return np.zeros([ 2, self.i.batch_size, self.i.hidden_size])
-		else :
-			return np.zeros([self.c.num_layers, 2, self.i.batch_size, self.i.hidden_size])
 	#---------------------------------------
 	def run_training_session(self):
 		# some variables
@@ -113,7 +109,10 @@ class MusicLSTM(object):
 			saver.save(sess, self.c.model_save_path, global_step=None)
 			print('Done.')
 		# setting current state to zeros for the first step only.
-		current_state = self.initial_state()
+		current_state = np.zeros([self.c.num_layers, 2, self.i.batch_size, self.i.hidden_size])
+		if self.c.num_layers == 1:
+			current_state = current_state[0]
+		# LOOP
 		for epoch in range(self.c.epochs) :
 			for step in range(self.i.num_loops_in_epoch):
 				#--------------------------------------
@@ -132,7 +131,7 @@ class MusicLSTM(object):
 					best_loss = loss
 					if self.c.save_model and epoch >= self.c.save_after_epoch and self.c.model_save_path :
 						print('Saving model ...', end='  ')
-						saver.save(sess, self.c.model_save_path, global_step=global_step, write_meta_graph=False)
+						saver.save(sess, self.c.model_save_path, global_step=global_step, write_meta_graph=True)
 						global_step += 1
 						print('Done.')
 		#---------------------------------------------------------------------------

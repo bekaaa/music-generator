@@ -102,9 +102,8 @@ def predictions_to_notes(preds):
 				# note is empty
 				continue
 			# else
-			name = sub[1:13].argmax() - 1
-			name = note_names[name]
-			octav = sub[13:].argmax() - 13
+			name = note_names[ sub[1:13].argmax() ]
+			octav = octaves[ sub[13:].argmax() ]
 			el = el + name + str(octav) + '.'
 		notes.append(el)
 	return notes
@@ -136,7 +135,7 @@ def create_midi(notes, file_name):
 		offset += .5
 
 	midi_stream = stream.Stream(output_notes)
-	midi_stream.write('midi', fp='../music/generated/'+file_name)
+	midi_stream.write('midi', fp='../data/generated_midi/'+file_name)
 	print('midi is generated and saved to disk')
 #******************************************************
 #def predict(input_obj, graph, best_model, model_path=None):

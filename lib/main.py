@@ -4,7 +4,7 @@ from __init__ import load_piece, rearrange_data, Input, Config, MusicLSTM
 
 def main():
 	config = Config()
-	config.num_prev = 50
+	config.num_prev = 20
 	config.batch_size = 14
 	config.num_steps = 10
 	config.element_size = 19*3
@@ -12,7 +12,7 @@ def main():
 	config.num_layers = 1
 	config.print_step = 20
 	config.save_model = True
-	config.save_after_epoch = 1
+	config.save_after_epoch = 2
 	config.model_save_path = '../checkpoints/2/model-test'
 
 	print('loading data ...', end='  ')
