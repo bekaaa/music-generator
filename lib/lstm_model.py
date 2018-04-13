@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import datetime as dt
-from __init__ import tf, np, sequence_loss
-#from __init__ import *
+#from __init__ import tf, np, sequence_loss
+from __init__ import *
 
 class MusicLSTM(object):
 	def __init__(self, input_, config):
@@ -9,6 +9,7 @@ class MusicLSTM(object):
 		self.c = config
 		# shared variables
 		self.graph = None
+		self.sess = None
 		self.tf_x = None
 		self.tf_y = None
 		self.is_training = None
@@ -17,6 +18,11 @@ class MusicLSTM(object):
 		self.logits = None
 		self.cost = None
 		self.optimizer = None
+		self.saver = None
+		self.global_step = None
+		self.curr_time = None
+		#-------------------
+
 	#---------------------------------
 	def def_graph(self):
 		'''
@@ -66,7 +72,7 @@ class MusicLSTM(object):
 						for idx in range(self.c.num_layers))
 			#--------------------------------------------------------------------------
 			# -*-* Forward Propagation -*-*-*
-			with tf.variable_scope('Forward_propagation', reuse=tf.AUTO_REUSE):
+			with tf.variable_scope('forward_propagation', reuse=tf.AUTO_REUSE):
 				# add dropout to input_
 				if self.is_training and self.c.droprate > 0 :
 					self.tf_x = tf.nn.dropout(self.tf_x, keep_prob=1-self.c.droprate, name='input_dropout')
@@ -74,40 +80,130 @@ class MusicLSTM(object):
 				output, self.state = tf.nn.dynamic_rnn(cell, self.tf_x, dtype=tf.float32, initial_state=rnn_state_tuple)
 				# output is in shape [batch_size, num_steps, hidden_size]
 				# state is in shape [num_layers, batch_size, cell_state_size]
+				self.state = tf.identity(self.state, 'output_state')
 
 				# reshape output to 2 dimesions
 				output = tf.reshape(output, [self.i.num_all_elem, self.i.hidden_size], name='output')
-
 				# run softmax
 				self.logits = tf.nn.xw_plus_b(output, W, b, name='logits')
 				# logits are in shape [num_all_elem, element_size] ie.(in the same shape as tf_y)
 			#---------------------------------------------------------------------------------------
 			# -*-* training cost and optimizer -*-*
-			with tf.variable_scope('cost_and_optimizer', reuse=tf.AUTO_REUSE):
+			with tf.variable_scope('cost', reuse=tf.AUTO_REUSE):
 				self.cost = sequence_loss(self.logits, self.tf_y)
-				self.optimizer = tf.train.AdamOptimizer(name='Adam').minimize(self.cost)
+				self.cost = tf.identity(self.cost, 'cost')
+			with tf.variable_scope('optimizer', reuse=tf.AUTO_REUSE):
+				self.optimizer = tf.train.AdamOptimizer(name='Adam').minimize(self.cost, name='optimizer')
 			#-----------------------------------------------------
 		return
 	#---------------------------------------
 	def run_training_session(self):
 		# some variables
-		best_loss = 99
-		global_step = 0
-		curr_time = dt.datetime.now()
+		self.best_loss = 99
+		self.global_step = 0
+		self.curr_time = dt.datetime.now()
 		#------------------
 		# define session and set our graph to it.
-		sess = tf.InteractiveSession(graph=self.graph)
+		self.sess = tf.InteractiveSession(graph=self.graph)
 		print('initializing ...', end='  ')
 		# initialize placeholders and variables.
-		sess.run(tf.global_variables_initializer())
+		self.sess.run(tf.global_variables_initializer())
 		print('Done')
 		# define model saver for checkpoints
-		saver = tf.train.Saver(name='saver')
+		self.saver = tf.train.Saver(name='saver')
 		# save graph one time only.
 		if self.c.save_model and self.c.model_save_path :
 			print('Saving graph to disk ...', end='  ')
-			saver.save(sess, self.c.model_save_path, global_step=None)
+			self.saver.save(self.sess, self.c.model_save_path, global_step=None)
 			print('Done.')
+		# reset saver so it doesn't delete te saved graph
+		self.saver = tf.train.Saver(name='saver', max_to_keep=1)
+		#-----------------------------------------
+		# setting current state to zeros for the first step only.
+		current_state = np.zeros([self.c.num_layers, 2, self.i.batch_size, self.i.hidden_size])
+		if self.c.num_layers == 1:
+			current_state = current_state[0]
+		#-------------------------------------------
+		# LOOP
+		for epoch in range(self.c.epochs) :
+			for step in range(self.i.num_loops_in_epoch):
+				current_state = self.training_step(epoch, step, current_state)
+				#--------------------------------------------------------
+		self.sess.close()
+		return
+	#-----------------------------------------------------------
+	def training_step(self, epoch, step, current_state):
+		#--------------------------------------
+		# get next batch, define feed dict and run one step of RNN
+		x, y = self.i.next_batch()
+		feed_dict = { self.tf_x : x, self.tf_y : y, self.init_state : current_state }
+		loss, _, current_state = self.sess.run([self.cost, self.optimizer, self.state], feed_dict=feed_dict)
+		#------------------------------------------
+		if loss < self.best_loss :
+			self.best_loss = loss
+			if self.c.save_model and epoch >= self.c.save_after_epoch and self.c.model_save_path :
+				print('Saving model ...', end='  ')
+				self.saver.save(self.sess, self.c.model_save_path, global_step=None, write_meta_graph=False)
+				#self.global_step += 1
+				print('Done.')
+		#-----------------------------------------------
+		if step % self.c.print_step == 0 :
+			seconds = float((dt.datetime.now() - self.curr_time).seconds) / self.c.print_step
+			self.curr_time = dt.datetime.now()
+			print('Epoch  {:>3}-{:>3}, step {:>3}-{:>3}, loss {:>6.4f}, '\
+				'current best loss {:>7.4f}, seconds per step {:>4.2f}'\
+				.format(epoch, self.c.epochs, step, self.i.num_loops_in_epoch, loss, self.best_loss, seconds))
+		#------------------------------------
+		return current_state
+	#------------------------------------------
+	def train(self, restore_from = None):
+		tf.reset_default_graph()
+		if restore_from :
+			print('loading existing model ...', end='  ')
+			expected_files = [restore_from + ext for ext in ['.meta', '.data-00000-of-00001','.index']]
+			assert set(glob.glob(restore_from+'*')) == set(expected_files)
+			self.sess = tf.InteractiveSession()
+			saver = tf.train.import_meta_graph(restore_from + '.meta')
+			saver = saver.restore(self.sess, restore_from)
+			self.graph = tf.get_default_graph()
+			print('Done.\nTraining is starting')
+			#---------------------------------------
+			# restore tensors and operations.
+			self.restore_tensors()
+			self.retrain()
+		#-------------------------------
+		else :
+			print('constructing new graph ...', end='  ')
+			self.def_graph()
+			# save graph to disk
+			print('Done.\nNow the training session will begin.')
+			self.run_training_session()
+			print('Finished Training.')
+		#---------------------------------------
+	#-----------------------------------------------
+	def restore_tensors(self):
+		self.tf_x =			self.graph.get_tensor_by_name('data_tensors/data_input:0')
+		self.tf_y =			self.graph.get_tensor_by_name('data_tensors/data_output:0')
+		self.is_training =	self.graph.get_tensor_by_name('training_flag:0')
+		self.init_state =	self.graph.get_tensor_by_name('initial_state/init_state:0')
+		self.state =		self.graph.get_tensor_by_name('forward_propagation/output_state:0')
+		self.cost = 		self.graph.get_tensor_by_name('cost/cost:0')
+		self.optimizer = 	self.graph.get_operation_by_name('optimizer/optimizer')
+	#---------------------------
+	def retrain(self):
+		#some variables
+		self.best_loss = 99
+		self.curr_time = dt.datetime.now()
+		#------------------
+		# define model saver for checkpoints
+		self.saver = tf.train.Saver(name='saver')
+		# save graph one time only.
+		if self.c.save_model and self.c.model_save_path :
+			print('Saving graph to disk ...', end='  ')
+			self.saver.save(self.sess, self.c.model_save_path, global_step=None)
+			print('Done.')
+		# reset saver to prevent deleting the above graph
+		self.saver = tf.train.Saver(name='saver', max_to_keep=1)
 		# setting current state to zeros for the first step only.
 		current_state = np.zeros([self.c.num_layers, 2, self.i.batch_size, self.i.hidden_size])
 		if self.c.num_layers == 1:
@@ -115,34 +211,9 @@ class MusicLSTM(object):
 		# LOOP
 		for epoch in range(self.c.epochs) :
 			for step in range(self.i.num_loops_in_epoch):
-				#--------------------------------------
-				# get next batch, define feed dict and run one step of RNN
-				x, y = self.i.next_batch()
-				feed_dict = { self.tf_x : x, self.tf_y : y, self.init_state : current_state }
-				loss, _, current_state = sess.run([self.cost, self.optimizer, self.state], feed_dict=feed_dict)
-				#------------------------------------------
-				if step % self.c.print_step == 0 :
-					seconds = float((dt.datetime.now() - curr_time).seconds) / self.c.print_step
-					curr_time = dt.datetime.now()
-					print('Epoch  {:>3}-{:>3}, step {:>3}-{:>3}, loss {:>6.4f}, '\
-						'current best loss {:>7.4f}, seconds per step {:>4.2f}'\
-						.format(epoch, self.c.epochs, step, self.i.num_loops_in_epoch, loss, best_loss, seconds))
-				if loss < best_loss :
-					best_loss = loss
-					if self.c.save_model and epoch >= self.c.save_after_epoch and self.c.model_save_path :
-						print('Saving model ...', end='  ')
-						saver.save(sess, self.c.model_save_path, global_step=global_step, write_meta_graph=True)
-						global_step += 1
-						print('Done.')
-		#---------------------------------------------------------------------------
-		sess.close()
+				current_state = self.training_step(epoch, step, current_state)
+				#--------------------------------------------------------
+		self.sess.close()
 		return
-	#------------------------------------------
-	def train(self):
-		print('constructing the graph ...', end='  ')
-		self.def_graph()
-		# save graph to disk
-		print('Done.\nNow the training session will begin.')
-		self.run_training_session()
-		print('Finished Training.')
+
 #****************************************************
