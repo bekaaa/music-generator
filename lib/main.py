@@ -18,7 +18,7 @@ def train_on_all():
 	config = set_config()
 
 	data_source = '../data/Mozart_pickles/'
-	num_pieces = len(glob.glob(data_source+'*.pkl'))
+	num_pieces = len(glob.glob(data_source+'*.pkl')) - 1
 	overall_epochs = 2
 	for overall_epoch in range(overall_epochs):
 		print('starting overall epoch', overall_epoch)
@@ -28,15 +28,15 @@ def train_on_all():
 			raw_data = rearrange_data(raw_data, config.num_prev)
 			print('data loaded in shape', raw_data.shape)
 
-			config.model_save_path = '../checkpoints/mozart/piece-%d' % pieceId
+			config.model_save_path = '../checkpoints/mozart/model0'
 			data_obj = Input(raw_data, config)
 			model = MusicLSTM(data_obj, config)
 			if pieceId == 0 and overall_epoch == 0:
 				model.train()
 			elif pieceId == 0 :
-				model.train(restore_from='../checkpoints/mozart/piece-%d' % (num_pieces-1))
+				model.train(restore_from='../checkpoints/mozart/model0')
 			else :
-				model.train(restore_from='../checkpoints/mozart/piece-%d' % (pieceId-1) )
+				model.train(restore_from='../checkpoints/mozart/model0' )
 #**************************************
 def compose_new_piece(data_, config, model_path, length):
 	'''
@@ -74,22 +74,21 @@ def set_config():
 	config.epochs = 100
 	config.num_layers = 1
 	config.print_step = 20
-	config.save_model = False
-	onfig.save_model = True
+	config.save_model = True
 	config.save_after_epoch = 0
-	config.model_save_path = '../checkpoints/2/model-test6'
+	#config.model_save_path = '../checkpoints/2/model-test6'
 
 	return config
 
 if __name__ == '__main__':
 	#main()
-	#train_on_all()
-	config = set_config()
-	print('loading data ...', end='  ')
-	raw_data = load_piece('../data/Mozart_pickles/', 18)
-	raw_data = rearrange_data(raw_data, config.num_prev)
-	print('data loaded in shape',raw_data.shape)
-
-	data_obj = Input(raw_data, config)
-
-	compose_new_piece(data_obj, config, '../checkpoints/mozart/piece-1', 50)
+	train_on_all()
+	# config = set_config()
+	# print('loading data ...', end='  ')
+	# raw_data = load_piece('../data/Mozart_pickles/', 18)
+	# raw_data = rearrange_data(raw_data, config.num_prev)
+	# print('data loaded in shape',raw_data.shape)
+	#
+	# data_obj = Input(raw_data, config)
+	#
+	# compose_new_piece(data_obj, config, '../checkpoints/mozart/piece-1', 50)
