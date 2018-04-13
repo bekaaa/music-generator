@@ -61,10 +61,10 @@ class MusicLSTM(object):
 			# initial state for C and H
 			with tf.variable_scope('initial_state', reuse=tf.AUTO_REUSE):
 				if self.c.num_layers == 1 :
-					self.init_state = tf.placeholder(tf.float32,[2, self.i.batch_size, self.i.hidden_size],'init_state')
+					self.init_state = tf.placeholder(tf.float32,[2, self.c.batch_size, self.i.hidden_size],'init_state')
 					rnn_state_tuple = tf.contrib.rnn.LSTMStateTuple(self.init_state[0], self.init_state[1])
 				else :
-					self.init_state = tf.placeholder(tf.float32,[self.c.num_layers, 2, self.i.batch_size,self.i.hidden_size],\
+					self.init_state = tf.placeholder(tf.float32,[self.c.num_layers,2, self.c.batch_size, self.i.hidden_size],\
 						'init_state')
 					state_per_layer_list = tf.unstack(self.init_state, axis=0)
 					rnn_state_tuple = tuple(
@@ -181,11 +181,15 @@ class MusicLSTM(object):
 			print('Finished Training.')
 		#---------------------------------------
 	#-----------------------------------------------
-	def restore_tensors(self):
+	def restore_tensors(self, predicting=False):
+
 		self.tf_x =			self.graph.get_tensor_by_name('data_tensors/data_input:0')
-		self.tf_y =			self.graph.get_tensor_by_name('data_tensors/data_output:0')
 		self.is_training =	self.graph.get_tensor_by_name('training_flag:0')
 		self.init_state =	self.graph.get_tensor_by_name('initial_state/init_state:0')
+		if predicting :
+			self.logits =	self.graph.get_tensor_by_name('forward_propagation/logits:0')
+			return
+		self.tf_y =			self.graph.get_tensor_by_name('data_tensors/data_output:0')
 		self.state =		self.graph.get_tensor_by_name('forward_propagation/output_state:0')
 		self.cost = 		self.graph.get_tensor_by_name('cost/cost:0')
 		self.optimizer = 	self.graph.get_operation_by_name('optimizer/optimizer')
@@ -215,5 +219,23 @@ class MusicLSTM(object):
 				#--------------------------------------------------------
 		self.sess.close()
 		return
-
+	#------------------------------
+	def init_predictor(self, model_path):
+		tf.reset_default_graph()
+		print('loading existing model ...', end='  ')
+		expected_files = [model_path + ext for ext in ['.meta', '.data-00000-of-00001','.index']]
+		assert set(glob.glob(model_path+'*')) == set(expected_files)
+		self.sess = tf.InteractiveSession()
+		saver = tf.train.import_meta_graph(model_path + '.meta')
+		saver = saver.restore(self.sess, model_path)
+		self.graph = tf.get_default_graph()
+		print('Graph is ready.\nRestoring tensors ...', end='  ')
+		self.restore_tensors(predicting = True)
+		print('Done.')
+	#-----------------------------------------------
+	def predict(self, x):
+		zero_state = np.zeros([2, 1, self.i.hidden_size])
+		feed_dict={ self.tf_x : x, self.init_state : zero_state, self.is_training : False }
+		[preds] = self.sess.run([self.logits], feed_dict=feed_dict)
+		return preds
 #****************************************************

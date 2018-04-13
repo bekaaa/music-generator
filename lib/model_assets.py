@@ -138,4 +138,3 @@ def create_midi(notes, file_name):
 	midi_stream.write('midi', fp='../data/generated_midi/'+file_name)
 	print('midi is generated and saved to disk')
 #******************************************************
-#def predict(input_obj, graph, best_model, model_path=None):
