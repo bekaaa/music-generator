@@ -46,30 +46,34 @@ def compose_new_piece(data_, config, model_path, length):
 	idx = np.random.randint(0, data_.num_loops_in_epoch)
 	for i in range(idx+1):
 		x, _ = data_.next_batch()
-	# x is in shape (1, steps, PxN)
+	# x is in shape (batches, steps, PxN)
 
 	composed = np.zeros([length, config.element_size])
 	model = MusicLSTM(data_, config)
 	model.init_predictor(model_path)
 
 	for l in range(length) :
-		x[0,1:] = np.zeros([config.num_steps-1, data_.hidden_size])
+		for b in range(config.batch_size) :
+			if b == 0 :
+				x[0,1:] = np.zeros([config.num_steps-1, data_.hidden_size])
+			else :
+				x[b,:] = np.zeros([config.num_steps, data_.hidden_size])
 		preds = model.predict(x)
-		# preds are in shape [num_steps, N]
+		# preds are in shape [batches*num_steps, N]
 		composed[l] = preds[0]
-		x = x.reshape([1, config.num_steps, config.num_prev, config.element_size])
+		x = x.reshape([config.batch_size, config.num_steps, config.num_prev, config.element_size])
 		x[0,0,:-1] = x[0,0,1:]
 		x[0,0,-1] = preds[0,0]
-		x = x.reshape([1, config.num_steps, data_.hidden_size])
+		x = x.reshape([config.batch_size, config.num_steps, data_.hidden_size])
 
 	notes = predictions_to_notes(composed)
-	create_midi(notes, 'generatedtest.mid')
+	create_midi(notes, 'generatedtest2.mid')
 #-----------------------------------------------------------------------------
 def set_config():
 	config = Config()
-	config.num_prev = 20
-	config.batch_size = 1
-	config.num_steps = 30
+	config.num_prev = 50
+	config.batch_size = 30
+	config.num_steps = 40
 	config.element_size = 19*3
 	config.epochs = 100
 	config.num_layers = 1
@@ -82,13 +86,13 @@ def set_config():
 
 if __name__ == '__main__':
 	#main()
-	train_on_all()
-	# config = set_config()
-	# print('loading data ...', end='  ')
-	# raw_data = load_piece('../data/Mozart_pickles/', 18)
-	# raw_data = rearrange_data(raw_data, config.num_prev)
-	# print('data loaded in shape',raw_data.shape)
-	#
-	# data_obj = Input(raw_data, config)
-	#
-	# compose_new_piece(data_obj, config, '../checkpoints/mozart/piece-1', 50)
+	#train_on_all()
+	config = set_config()
+	print('loading data ...', end='  ')
+	raw_data = load_piece('../data/Mozart_pickles/', 18)
+	raw_data = rearrange_data(raw_data, config.num_prev)
+	print('data loaded in shape',raw_data.shape)
+
+	data_obj = Input(raw_data, config)
+
+	compose_new_piece(data_obj, config, '../checkpoints/cloud/model0', 50)

@@ -234,7 +234,7 @@ class MusicLSTM(object):
 		print('Done.')
 	#-----------------------------------------------
 	def predict(self, x):
-		zero_state = np.zeros([2, 1, self.i.hidden_size])
+		zero_state = np.zeros([2, self.i.batch_size, self.i.hidden_size])
 		feed_dict={ self.tf_x : x, self.init_state : zero_state, self.is_training : False }
 		[preds] = self.sess.run([self.logits], feed_dict=feed_dict)
 		return preds
