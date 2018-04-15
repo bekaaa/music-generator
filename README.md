@@ -6,3 +6,5 @@
 - Main scripts are under lib/ directory, notebooks used for debugging are in drafts/, music input are under music/,
   saved output files are under data/ and model checkpoints are under checkpoints/ .
 -------------------------
+
+** check version notes for more details.  
